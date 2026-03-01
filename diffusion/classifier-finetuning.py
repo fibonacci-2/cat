@@ -152,6 +152,10 @@ def main():
 
     # Training args
     os.makedirs(args.save_dir, exist_ok=True)
+    # Calculate warmup steps from ratio
+    total_steps = (len(train_ds) // args.batch_size) * args.epochs
+    warmup_steps = int(total_steps * args.warmup_ratio)
+
     targs = TrainingArguments(
         output_dir=args.save_dir,
         # overwrite_output_dir=True,
@@ -168,7 +172,7 @@ def main():
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         weight_decay=args.weight_decay,
-        warmup_ratio=args.warmup_ratio,
+        warmup_steps=warmup_steps,
         logging_steps=50,
         report_to="none",
         fp16=args.fp16,
@@ -181,7 +185,6 @@ def main():
         args=targs,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        tokenizer=tokenizer,
         data_collator=collator,
         compute_metrics=compute_metrics,
     )
