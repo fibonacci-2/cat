@@ -194,33 +194,44 @@ def load_clf(model_name: str, device: str):
     mdl.to(device)
     mdl.eval()
 
-    label2id = {k.lower(): int(v) for k, v in (mdl.config.label2id or {}).items()}
+    label2id_raw = mdl.config.label2id or {}
+    label2id = {str(k).strip().lower(): int(v) for k, v in label2id_raw.items()}
 
-    def find_label(keys: List[str]) -> Optional[int]:
-        for k in keys:
-            for name, idx in label2id.items():
-                if k in name:
-                    return idx
-        return None
+    # 1) Prefer exact matches if present
+    if "suicide" in label2id and "non-suicide" in label2id:
+        suicide_id = label2id["suicide"]
+        non_suicide_id = label2id["non-suicide"]
+    elif "label_1" in label2id and "label_0" in label2id:
+        # common HF convention: LABEL_1 = positive
+        suicide_id = label2id["label_1"]
+        non_suicide_id = label2id["label_0"]
+    else:
+        # 2) Fallback: try safe keyword rules (avoid substring trap)
+        suicide_id = None
+        non_suicide_id = None
 
-    suicide_id = find_label(["suicide"])
-    non_suicide_id = find_label(["non-suicide", "nonsuicide", "non suicide", "control", "negative"])
+        # exact/startswith checks only (no "in" substring)
+        for name, idx in label2id.items():
+            n = name.replace("_", "-")
+            if n == "suicide" or n.startswith("suicide-"):
+                suicide_id = idx
+            if n in {"non-suicide", "nonsuicide", "non suicide", "control", "negative"} or n.startswith("non-suicide-"):
+                non_suicide_id = idx
 
-    if suicide_id is None or non_suicide_id is None:
-        if mdl.config.num_labels == 2:
-            suicide_id = 1
-            non_suicide_id = 0
-        else:
-            raise ValueError(
-                f"Could not infer label ids from model config label2id={mdl.config.label2id}. "
-                "Please use a binary model or modify mapping."
-            )
+        # 3) Last resort for binary
+        if (suicide_id is None or non_suicide_id is None):
+            if mdl.config.num_labels == 2:
+                suicide_id = 1
+                non_suicide_id = 0
+            else:
+                raise ValueError(
+                    f"Could not infer label ids. label2id={label2id_raw}, num_labels={mdl.config.num_labels}"
+                )
 
     print(f"[INFO] label2id: {mdl.config.label2id}")
     print(f"[INFO] using suicide_id={suicide_id}, non_suicide_id={non_suicide_id}")
 
     return tok, mdl, label2id, suicide_id, non_suicide_id
-
 
 @torch.no_grad()
 def predict_probs(texts: List[str], tok, mdl, device: str, batch_size: int, suicide_id: int):
