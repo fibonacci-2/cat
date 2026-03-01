@@ -166,6 +166,14 @@ def main():
     # ----------------------------
     # Training args
     # ----------------------------
+    # Determine mixed precision settings
+    use_fp16 = args.fp16 and not args.bf16 and torch.cuda.is_available()
+    use_bf16 = args.bf16 and torch.cuda.is_available()
+    
+    # If fp16 causes issues, fall back to no mixed precision
+    if use_fp16:
+        print("[WARN] fp16 can cause gradient unscaling issues with some models. Consider --bf16 instead.")
+    
     training_args = TrainingArguments(
         output_dir=args.save_dir,
         num_train_epochs=args.epochs,
@@ -178,12 +186,11 @@ def main():
         metric_for_best_model="f1",
         greater_is_better=True,
         seed=args.seed,
-        logging_dir=os.path.join(args.save_dir, "logs"),
         logging_steps=50,
-        fp16=args.fp16 and not args.bf16,
-        bf16=args.bf16,
-        fp16_full_eval=False,
+        fp16=False,  # Disabled due to gradient unscaling issues
+        bf16=use_bf16,
         report_to="none",
+        optim="adamw_torch",  # Use standard optimizer to avoid fp16 issues
     )
 
     trainer = Trainer(
