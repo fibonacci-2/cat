@@ -154,7 +154,7 @@ def main():
     os.makedirs(args.save_dir, exist_ok=True)
     targs = TrainingArguments(
         output_dir=args.save_dir,
-        overwrite_output_dir=True,
+        # overwrite_output_dir=True,
         evaluation_strategy="steps",
         eval_steps=args.eval_steps,
         save_strategy="steps",
